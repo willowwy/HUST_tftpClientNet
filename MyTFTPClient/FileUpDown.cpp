@@ -229,7 +229,7 @@ bool TftpClient::uploadFile()
 						return false;
 					}
 					//到这里说明一切正常 继续循环 发送数据
-					//若已经读完则不再继续读
+					//若已经读完则不再继续
 					if (flag == 1) readLength = fread(message + 4, sizeof(char), 512, file);
 				}
 
