@@ -174,7 +174,8 @@ bool TftpClient::uploadFile()
 					*messageOpCode = 3;
 
 					//循环blocknumber，使得可以传输大于32Mb的包
-					if (*messageBlockNumber == 0xffff) *messageBlockNumber = 0x0;
+					if (*messageBlockNumber == 0xffff)
+						*messageBlockNumber = 0x0;
 					else *messageBlockNumber += 1;
 					TftpClient::byteHandle(messageOpCode);
 					TftpClient::byteHandle(messageBlockNumber);
@@ -380,7 +381,6 @@ bool TftpClient::downloadFile()
 		//emit updateTextBrowser(QString("Starting download ") + QString(fileName));
 		sendStartDownloadMessage();
 
-
 		GetSystemTime(&startSysTime);
 		startTime = (unsigned long long)startSysTime.wMilliseconds + startSysTime.wSecond * 1000ull + startSysTime.wMinute * 60 * 1000ull + startSysTime.wHour * 60 * 60 * 1000ull;
 		//执行到此说明已得到请求的响应
@@ -426,8 +426,8 @@ bool TftpClient::downloadFile()
 				{
 					if (writeLength < 512)flag = 0;
 					*messageOpCode = 4;
-					if (*messageBlockNumber == 0xfffe) 
-						*messageBlockNumber = 1;
+					if (*messageBlockNumber == 0xfffe)
+						*messageBlockNumber = 0xffff;
 					else *messageBlockNumber = *messageBlockNumber + 1;
 					TftpClient::byteHandle(messageOpCode);
 					TftpClient::byteHandle(messageBlockNumber);
@@ -443,15 +443,14 @@ bool TftpClient::downloadFile()
 							dataLength = recvfrom(clientSocket, ack, 600, 0, (sockaddr*)&sourceSockaddr, &sourceSockaddr_len);
 							TftpClient::byteHandle((unsigned short*)ack);
 							TftpClient::byteHandle((unsigned short*)(ack + 2));
-							if (*ackBlockNumber <= TftpClient::tempByteHandle(messageBlockNumber))
-							{
+							if (*ackBlockNumber <= TftpClient::tempByteHandle(messageBlockNumber) && ((*ackBlockNumber) & 0xffff) != 0)
 								*ackOpCode = 0;
-							}
+							
 							if (*ackOpCode == 0 && i % 10 == 0)sendto(clientSocket, message, 4, 0, (struct sockaddr*)&serverSockaddr, sizeof(serverSockaddr));
 						}
 						//恢复messageBlockNumber的字节序
 						TftpClient::byteHandle(messageBlockNumber);
-						//如果ackopcode为5 说明server返回的报文为ERROR报文 
+						//如果ackopcode为5 说明server返回的报文为ERROR报文
 						if (*ackOpCode == 5)
 						{
 							this->appendErrorMessage(ack + 4);
@@ -462,7 +461,7 @@ bool TftpClient::downloadFile()
 						}
 						//如果ackopcode为3 但blocknumber与发送的不同 说明发生了未指定的错误
 						//则结束传输 传出blocknumber错误的errormessage
-						else if (*ackOpCode == 3 && *ackBlockNumber != (*messageBlockNumber + 1))
+						else if (*ackOpCode == 3 && ((*ackBlockNumber & 0xffff) != ((*messageBlockNumber + 1) & 0xffff)))
 						{
 							this->appendErrorMessage("ack block number ERROR!\n");
 							logWrite(logFile, QString("Transfer is error with wrong ack number\n"));
@@ -479,10 +478,7 @@ bool TftpClient::downloadFile()
 							return false;
 						}
 						//到这里说明一切正常 继续循环 写入数据
-						//logWrite(logFile, QString().sprintf("Get packet %u successfully.sendLength:%d\n", *messageBlockNumber, writeLength));
 						writeLength = fwrite(ack + 4, sizeof(char), dataLength - 4, file);
-						//emit sendDownloadPacketNumberMessage(*ackBlockNumber);
-						//logWrite(logFile, QString("Write File successfully. writelength:") + QString().sprintf("%d\n", writeLength));
 					}
 				}
 				logWrite(logFile, QString().sprintf("Last Packet Get successfully\n"));

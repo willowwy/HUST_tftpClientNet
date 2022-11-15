@@ -17,8 +17,8 @@ MyTFTPClient::MyTFTPClient(QWidget* parent)
 	this->setTftpClient(tftpClient);
 
 
-	QString ipString = QString("tftp://10.12.172.172");
-	QString clientIPString = QString("tftp://10.12.172.172");
+	QString ipString = QString("tftp://192.168.200.117");
+	QString clientIPString = QString("tftp://192.168.200.117");
 	QString saveDirPath = QCoreApplication::applicationDirPath() + "/DownloadFile/";
 	QString downloadFile = QString("test.txt");
 
