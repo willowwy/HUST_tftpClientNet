@@ -17,16 +17,15 @@ MyTFTPClient::MyTFTPClient(QWidget* parent)
 	this->setTftpClient(tftpClient);
 
 
-	QString ipString = QString("tftp://192.168.200.117");
-	QString clientIPString = QString("tftp://192.168.200.117");
-	QString saveDirPath = QCoreApplication::applicationDirPath() + "/DownloadFile/";
-	QString downloadFile = QString("test.txt");
+	QString ipString /*= QString("tftp://192.168.200.117")*/;
+	QString clientIPString /*= QString("tftp://192.168.200.117")*/;
+	QString saveDirPath /*= QCoreApplication::applicationDirPath() + "/DownloadFile/"*/;
+	QString downloadFile /*= QString("test.txt")*/;
 
 	ui->serverIPLine->clear();
 	ui->serverIPLine->setText(ipString);
 	ui->clientIPLine->setText(clientIPString);
 	ui->savePathLine->setText(saveDirPath);
-	//ui->downloadPathLine->setText(QString::fromLocal8Bit("下载测试.docx"));
 	ui->downloadPathLine->setText(downloadFile);
 	ui->netasciiCheckBox->setChecked(false);
 	ui->octetCheckBox->setChecked(true);
@@ -37,7 +36,6 @@ MyTFTPClient::MyTFTPClient(QWidget* parent)
 	this->setclientIPLocation(clientIPString.remove("tftp://"));
 	this->setSavePath(saveDirPath);
 	this->setDownloadFilePath(downloadFile);
-	//tftpClient.setServerIP(ipString.remove("http://").toLatin1().data());
 	worker->setTftpClient(tftpClient);
 
 
@@ -83,6 +81,8 @@ void MyTFTPClient::on_setIPButton_clicked()
 	ui->clientIPLine->clear();
 	ui->serverIPLine->setText(server);
 	ui->clientIPLine->setText(client);
+	this->setIPLocation(server.remove("tftp://"));
+	this->setclientIPLocation(client.remove("tftp://"));
 }
 
 
@@ -123,9 +123,6 @@ void MyTFTPClient::on_downloadButton_clicked()
 		client->setTransferMode(this->getTransferMode().toLatin1().data());
 		Worker* worker = this->getWorker();
 		worker->startWork();
-		//QString string = QString::fromLocal8Bit("下载文件保存路径为");
-		//string += this->getSavePath() + path;
-		//ui->textBrowser->append(string);
 	}
 }
 
@@ -140,7 +137,6 @@ void MyTFTPClient::on_uploadButton_clicked()
 	client->setTransferMode(this->getTransferMode().toLatin1().data());
 	Worker* worker = this->getWorker();
 	worker->startWork();
-
 }
 
 void MyTFTPClient::on_selectPathButton_clicked()
@@ -148,7 +144,6 @@ void MyTFTPClient::on_selectPathButton_clicked()
 	QString path;
 	QFileDialog* dialog = new QFileDialog(this);
 	dialog->setFileMode(QFileDialog::Directory);
-	//path = dialog->getOpenFileName(this, "Please choose a directory", ".",QFileDialog::Directory);
 	path = QFileDialog::getExistingDirectory(this, "Please choose a directory", ".");
 	if (!path.isEmpty())
 	{

@@ -1,7 +1,6 @@
 #pragma once
 #include "FileUpDown.h"
 #include <WinSock2.h>
-//#pragma comment(lib, "ws2_32.lib")
 
 #define NET_ASCII 1
 #define OCTET 2
@@ -29,8 +28,6 @@ bool TftpClient::uploadFile()
 			logWrite(logFile, "WSA failed to initialize for some reason\n");
 		return false;
 	}
-
-	logWrite(logFile, "WSA init Successfully\n");
 
 	unsigned long long startTime;
 	unsigned long long endTime;
@@ -162,6 +159,7 @@ bool TftpClient::uploadFile()
 				unsigned short us_blockNumber = 0;
 				int readLength = 0;
 				int flag = 1;
+				int again = 0;
 
 				readLength = fread(message + 4, sizeof(char), 512, file);
 				logWrite(logFile, QString("Read File successfully\n"));
@@ -174,8 +172,11 @@ bool TftpClient::uploadFile()
 					*messageOpCode = 3;
 
 					//循环blocknumber，使得可以传输大于32Mb的包
-					if (*messageBlockNumber == 0xffff)
+					if (*messageBlockNumber == 0xffff) {
 						*messageBlockNumber = 0x0;
+						again++;
+					}
+						
 					else *messageBlockNumber += 1;
 					TftpClient::byteHandle(messageOpCode);
 					TftpClient::byteHandle(messageBlockNumber);
@@ -237,7 +238,7 @@ bool TftpClient::uploadFile()
 				fclose(file);
 				GetSystemTime(&sysTime);
 				endTime = (unsigned long long)sysTime.wMilliseconds + sysTime.wSecond * 1000ull + sysTime.wMinute * 60 * 1000ull + sysTime.wHour * 60 * 60 * 1000ull;
-				unsigned long long byteNumber = (unsigned long long)(*messageBlockNumber - 1) * 512 + readLength;
+				unsigned long long byteNumber = (again*512*0xffff)+(unsigned long long)(*messageBlockNumber - 1) * 512 + readLength;
 
 				double averageSpeed;
 				//传输过快，为防止divide 0用此近似操作
@@ -277,13 +278,24 @@ bool TftpClient::uploadFile()
 bool TftpClient::downloadFile()
 {
 	WSADATA wsaData;
-	int soo = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	if (soo != 0) {
-		logWrite(logFile, "WSA init Failed\n");
+	int flag = WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+	if (flag == 0)
+		logWrite(logFile, "WSA init Successfully\n");
+	else {
+		if (flag == WSASYSNOTREADY)
+			logWrite(logFile, "The underlying network subsystem is not ready\n");
+		else if (flag == WSAVERNOTSUPPORTED)
+			logWrite(logFile, "Winsock version information number is not supported\n");
+		else if (flag == WSAEPROCLIM)
+			logWrite(logFile, "Winsock usage limit reached\n");
+		else if (flag == WSAEFAULT)
+			logWrite(logFile, "lpWSAData is not a valid pointer\n");
+		else
+			logWrite(logFile, "WSA failed to initialize for some reason\n");
 		return false;
 	}
-
-	logWrite(logFile, "WSA init Successfully\n");
+	//logWrite(logFile, "WSA init Successfully\n");
 	unsigned long long startTime;
 	unsigned long long endTime;
 	SYSTEMTIME startSysTime;
@@ -347,7 +359,7 @@ bool TftpClient::downloadFile()
 
 		//用于保存收到的报文的长度
 		int dataLength = 0;
-		for (int i = 0; i < 50 && *ackOpCode == 0; i++)
+		for (int i = 0; i < 100 && *ackOpCode == 0; i++)
 		{
 			dataLength = recvfrom(clientSocket, ack, 600 * sizeof(char), 0, (struct sockaddr*)&sourceSockaddr, (int*)&sourceSockaddr_len);
 			//recv(clientSocket, ack, 600 * sizeof(char), 0);
@@ -398,6 +410,7 @@ bool TftpClient::downloadFile()
 			char path[MAX_PATH * 2];
 			memset(path, 0, sizeof(char) * (MAX_PATH * 2));
 			strcat(path, this->getSavePath());
+			strcat(path, "/");
 			strcat(path, this->getDownloadFileName());
 
 			//按照传输模式来确定打开需要下载的文件的方式
@@ -413,31 +426,34 @@ bool TftpClient::downloadFile()
 				memset(message, 0, 6 * sizeof(char));
 				unsigned short* messageOpCode = (unsigned short*)message;
 				unsigned short* messageBlockNumber = (unsigned short*)(message + 2);
-				//*messageBlockNumber = 1;
+				
 				int writeLength = 0;
 				int flag = 1;
-				//writeLength = fread(message + 4, sizeof(char), 512, file);
+				int again = 0;
 				writeLength = fwrite(ack + 4, sizeof(char), dataLength - 4, file);
 
 				logWrite(logFile, QString("Write File successfully\n"));
 
 				//每读取512字节的data就执行传输
-				while (1 == flag)
+				while (flag == 1)
 				{
-					if (writeLength < 512)flag = 0;
+					if (writeLength < 512) flag = 0;
 					*messageOpCode = 4;
-					if (*messageBlockNumber == 0xfffe)
+					if (*messageBlockNumber == 0xfffe) {
+						again++;
 						*messageBlockNumber = 0xffff;
+					}
 					else *messageBlockNumber = *messageBlockNumber + 1;
 					TftpClient::byteHandle(messageOpCode);
 					TftpClient::byteHandle(messageBlockNumber);
+
 					//发送ack报文
 					int back = sendto(clientSocket, message, 4, 0, (struct sockaddr*)&serverSockaddr, sizeof(serverSockaddr));
 					if (flag == 1)
 					{
 						int error = WSAGetLastError();
 						*ackOpCode = 0;
-						//每0.5秒一次的无限次重新发送
+						//无限次重新发送
 						for (int i = 0; *ackOpCode == 0; i++)
 						{
 							dataLength = recvfrom(clientSocket, ack, 600, 0, (sockaddr*)&sourceSockaddr, &sourceSockaddr_len);
@@ -445,7 +461,7 @@ bool TftpClient::downloadFile()
 							TftpClient::byteHandle((unsigned short*)(ack + 2));
 							if (*ackBlockNumber <= TftpClient::tempByteHandle(messageBlockNumber) && ((*ackBlockNumber) & 0xffff) != 0)
 								*ackOpCode = 0;
-							
+
 							if (*ackOpCode == 0 && i % 10 == 0)sendto(clientSocket, message, 4, 0, (struct sockaddr*)&serverSockaddr, sizeof(serverSockaddr));
 						}
 						//恢复messageBlockNumber的字节序
